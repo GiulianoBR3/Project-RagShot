@@ -1,0 +1,31 @@
+{
+  "name": "PRS",
+  "tree": {
+    "$className": "DataModel",
+
+    "ReplicatedStorage": {
+      "Modules": {
+        "$path": "src/shared"
+      }
+    },
+
+    "ServerScriptService": {
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Init": {
+          "$path": "src/PlayerScripts"
+        }
+      },
+      "StarterCharacterScripts": {
+        "Init": {
+          "$path": "src/CharacterScripts"
+        }
+      }
+    }
+  }
+}
