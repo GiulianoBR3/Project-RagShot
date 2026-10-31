@@ -2,30 +2,29 @@ local module = {}
 
 function module.main(char)
     char.Humanoid.RequiresNeck = false
-    for _,v in char.Torso:GetChildren() do
+    for _,v in char.Torso:GetDescendants() do
         if v:IsA("Motor6D") then
-            local Constraint = Instance.new(if v.Name ~= "Neck" then "RopeConstraint" else "BallSocketConstraint")
+            local Constraint = Instance.new("AnimationConstraint")
             local Attachment0 = Instance.new("Attachment")
             local Attachment1 = Instance.new("Attachment")
 
+            Attachment0.Name = v.Name .. "RigAttachment"
+            Attachment1.Name = v.Name .. "RigAttachment"
             Attachment0.Parent = v.Part0
             Attachment1.Parent = v.Part1
 
             Attachment0.CFrame = v.C0
             Attachment1.CFrame = v.C1
 
+            Constraint.Name = v.Name
             Constraint.Attachment0 = Attachment0
             Constraint.Attachment1 = Attachment1
-            Constraint.Parent = char.Torso
-            Constraint.Name = v.Name
-            if v.Name ~= "Neck" then
-                Constraint.Visible = false
-                Constraint.Length = (v.C0.Position - v.C1.Position).Magnitude/4
-            else
-                Constraint.LimitsEnabled = true
-                Constraint.TwistLimitsEnabled = true
-            end
+            Constraint.IsKinematic = false
+            Constraint.MaxTorque = 100
+            Constraint.Parent = v.Parent
             v:Destroy()
+        elseif v:IsA("BasePart") then
+            v.Massless = true
         end
     end
 end
