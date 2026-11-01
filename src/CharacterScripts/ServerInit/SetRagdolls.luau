@@ -20,7 +20,7 @@ function module.main(char)
             Constraint.Attachment0 = Attachment0
             Constraint.Attachment1 = Attachment1
             Constraint.IsKinematic = false
-            Constraint.MaxTorque = 150
+            Constraint.MaxTorque = 200
             Constraint.Parent = v.Parent
             v.Enabled = false
         end
