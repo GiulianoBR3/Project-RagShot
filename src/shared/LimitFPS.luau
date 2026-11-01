@@ -1,4 +1,4 @@
-task.wait(5)
+--task.wait(5)
 
 local RunService = game:GetService("RunService")
 local MaxFPS = 15 -- Set your desired frame cap here
