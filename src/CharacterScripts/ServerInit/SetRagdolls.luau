@@ -20,10 +20,13 @@ function module.main(char)
             Constraint.Attachment0 = Attachment0
             Constraint.Attachment1 = Attachment1
             Constraint.IsKinematic = false
-            Constraint.MaxTorque = 100
+            Constraint.MaxTorque = 150
             Constraint.Parent = v.Parent
-            v:Destroy()
-        elseif v:IsA("BasePart") then
+            v.Enabled = false
+        end
+    end
+    for _,v in char:GetDescendants() do
+        if v:IsA("BasePart") then
             v.Massless = true
         end
     end

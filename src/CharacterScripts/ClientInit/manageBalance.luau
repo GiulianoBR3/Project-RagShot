@@ -27,7 +27,7 @@ function module.Balance(char, Humanoid)
 	Params.FilterType = Enum.RaycastFilterType.Exclude
 	Params.FilterDescendantsInstances = { char }
 
-	local Hover_Height = 3.5
+	local Hover_Height = 3.6
 	local Stiffness = 1000
 	local Damping = 2 * math.sqrt(Stiffness) -- amortecimento crítico (~63)
 
@@ -52,7 +52,7 @@ function module.Balance(char, Humanoid)
 		local D = angVel * 500
 		local final = P - D
 
-		Torque.Torque = Vector3.new(final.X, Torque.Y, final.Z)
+		Torque.Torque = Vector3.new(final.X, Torque.Torque.Y, final.Z)
 
 		local ray = RaycastingService.Raycast(Torso.Position, Vector3.new(0, -Hover_Height, 0), Params)
 		if ray then

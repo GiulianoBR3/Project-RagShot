@@ -10,20 +10,23 @@ function module.jump(character)
             if not character:GetAttribute("OnGround") then
                 return
             end
-            character.Torso:ApplyImpulse(Vector3.new(0, 500, 0))
+            character.HumanoidRootPart:ApplyImpulse(Vector3.new(0, 500, 0))
         end
     end)
 end
 
 function module.Movement(character)
 	runService.RenderStepped:Connect(function(dt)
-		local force = GetdesiredMoveDirection() * 50 * character.Torso.AssemblyMass * dt
+        local MoveDir = GetdesiredMoveDirection()
+		local force = MoveDir * 100 * character.Torso.AssemblyMass * dt
 		local MaxSpeed = character.Humanoid.WalkSpeed
 		local currentVelocity = character.Torso.AssemblyLinearVelocity * Vector3.new(1, 0, 1)
-
 		if currentVelocity.Magnitude > MaxSpeed then
 			force -= currentVelocity.Unit * math.max(force:Dot(currentVelocity.Unit), 0)
 		end
+        if MoveDir.Magnitude == 0 then
+            force = currentVelocity * -.5
+        end
 
 		character.Torso:ApplyImpulse(force)
 	end)
