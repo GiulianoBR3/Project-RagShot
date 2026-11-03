@@ -30,13 +30,13 @@ function module.Balance(char, Humanoid)
     local Damping = 2 * math.sqrt(Stiffness)
 
     local conn
-    conn = RunService.Heartbeat:Connect(function(dt)
+    conn = RunService.PreSimulation:Connect(function(dt)
         if not RootPart:IsDescendantOf(workspace) then
             conn:Disconnect()
             return
         end
 
-        local ray = RaycastingService.Raycast(Torso.Position, Vector3.new(0, -Hover_Height, 0), Params)
+        local ray = RaycastingService.Raycast(RootPart.Position, Vector3.new(0, -Hover_Height, 0), Params)
         local final = Vector3.zero
         if ray then
 
@@ -53,12 +53,12 @@ function module.Balance(char, Humanoid)
             local D = angVel * 500
             final = P - D
 
-            local distance = (Torso.Position - ray.Position).Magnitude
+            local distance = (RootPart.Position - ray.Position).Magnitude
             local err = Hover_Height - distance
-            local velY = Torso.AssemblyLinearVelocity.Y
+            local velY = RootPart.AssemblyLinearVelocity.Y
 
             local force = (Stiffness * err) - (Damping * velY)
-            Torso:ApplyImpulse(Vector3.new(0, force * Torso.AssemblyMass * dt, 0))
+            RootPart:ApplyImpulse(Vector3.new(0, force * RootPart.AssemblyMass * dt, 0))
         end
         Torque.Torque = Vector3.new(final.X, Torque.Torque.Y, final.Z)
         char:SetAttribute("OnGround", ray ~= nil)
