@@ -1,0 +1,264 @@
+From 1da8204283f17d59d0cd4c7999200b73b3a9f8b5 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 3 Nov 2026 15:28:19 -0300
+Subject: [PATCH] Make character balance stable at low FPS
+
+- manageBalance: replace the per-frame impulse spring and Torque PD with
+  AlignOrientation (upright) and a vertical LinearVelocity (hover). The
+  physics engine solves constraints on every substep, so large frame times
+  no longer destabilize the character.
+- lookAtCamera: only set the AlignOrientation target to the camera yaw.
+- movement: run in PreSimulation, clamp dt, and make braking frame-rate
+  independent (it was a fixed impulse per frame, without dt or mass).
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Mnv9BU5qjLepUgC3PXVUpE
+---
+ .../ClientInit/lookAtCamera.luau              | 36 +++-----
+ .../ClientInit/manageBalance.luau             | 91 ++++++++++++-------
+ src/CharacterScripts/ClientInit/movement.luau | 36 +++++---
+ 3 files changed, 96 insertions(+), 67 deletions(-)
+
+diff --git a/src/CharacterScripts/ClientInit/lookAtCamera.luau b/src/CharacterScripts/ClientInit/lookAtCamera.luau
+index 2d00641..40200bf 100644
+--- a/src/CharacterScripts/ClientInit/lookAtCamera.luau
++++ b/src/CharacterScripts/ClientInit/lookAtCamera.luau
+@@ -4,34 +4,22 @@ local RunService = game:GetService("RunService")
+ 
+ local function straightenCF(cf)
+     local _, yaw, _ = cf:ToOrientation()
+-	return CFrame.fromOrientation(0, yaw, 0)
++    return CFrame.fromOrientation(0, yaw, 0)
+ end
+ 
+ function module.main(character)
+     local Root = character:WaitForChild("HumanoidRootPart")
+-    local Torque = Root:WaitForChild("Torque")
+-    local STIFFNESS = 400
+-    local DAMPING   = 50
+-    RunService.RenderStepped:Connect(function(dt)
+-        
+-        local cf = straightenCF(Root.CFrame)
+-        local camCF = straightenCF(workspace.CurrentCamera.CFrame)
+-
+-        local lookVector = cf.LookVector
+-        local camLookVector = camCF.LookVector
+-
+-        local cross = lookVector:Cross(camLookVector)
+-        local dot = lookVector:Dot(camLookVector)
+-        local angle = math.atan2(cross.Y, dot)
+-
+-        local angVelY = Root.AssemblyAngularVelocity.Y
+-        local final = (angle * STIFFNESS - angVelY * DAMPING) * Root.AssemblyMass
+-
+-
+-
+-
+-        Torque.Torque = Vector3.new(Torque.Torque.X, final, Torque.Torque.Z)
++    local Align = Root:WaitForChild("UprightAlign") -- created in manageBalance.luau
++
++    -- Only the target changes here. The AlignOrientation constraint turns the
++    -- character toward the camera yaw on every physics substep, so low FPS only
++    -- makes the target update less often instead of destabilizing the character.
++    RunService.RenderStepped:Connect(function()
++        local camera = workspace.CurrentCamera
++        if camera then
++            Align.CFrame = straightenCF(camera.CFrame)
++        end
+     end)
+ end
+ 
+-return module
+\ No newline at end of file
++return module
+diff --git a/src/CharacterScripts/ClientInit/manageBalance.luau b/src/CharacterScripts/ClientInit/manageBalance.luau
+index a9684a4..2be0327 100644
+--- a/src/CharacterScripts/ClientInit/manageBalance.luau
++++ b/src/CharacterScripts/ClientInit/manageBalance.luau
+@@ -3,6 +3,16 @@ local module = {}
+ local RunService = game:GetService("RunService")
+ local RaycastingService = require(game:GetService("ReplicatedStorage").Modules.raycastingService)
+ 
++-- Tunables. Rough starting values: tune them in Studio.
++local HOVER_HEIGHT = 3.8
++local HOVER_GAIN = 15 -- 1/s: target vertical speed per stud of hover error
++local MAX_HOVER_SPEED = 20 -- studs/s: cap for the hover correction speed
++local HOVER_FORCE_MULT = 4 -- hover MaxForce, as a multiple of the character's weight
++
++local ALIGN_RESPONSIVENESS = 60
++local GROUND_TORQUE = 1e5
++local AIR_TORQUE = 1e4
++
+ function module.DisableStates(Humanoid)
+     for _, v in Enum.HumanoidStateType:GetEnumItems() do
+         if v ~= Enum.HumanoidStateType.Physics and v ~= Enum.HumanoidStateType.Dead and v ~= Enum.HumanoidStateType.None then
+@@ -14,54 +24,71 @@ end
+ 
+ function module.Balance(char, Humanoid)
+     local RootPart = char:WaitForChild("HumanoidRootPart")
+-    local Torso = char:WaitForChild("Torso")
+-
+-    local Torque = Instance.new("Torque")
+-    Torque.Attachment0 = RootPart:WaitForChild("RootAttachment")
+-    Torque.RelativeTo = Enum.ActuatorRelativeTo.World
+-    Torque.Parent = RootPart
++    local RootAttachment = RootPart:WaitForChild("RootAttachment")
++
++    -- Why constraints instead of per-frame impulses/torques:
++    -- the physics engine solves constraints on every physics substep, so they stay
++    -- stable no matter how low the client FPS gets. The script only updates the
++    -- *targets* once per frame. A hand-written spring that applies an impulse once
++    -- per frame (force * dt) becomes unstable when dt is large.
++
++    -- Keeps the character upright. lookAtCamera.luau sets its CFrame (yaw = camera yaw).
++    local Align = Instance.new("AlignOrientation")
++    Align.Name = "UprightAlign"
++    Align.Mode = Enum.OrientationAlignmentMode.OneAttachment
++    Align.Attachment0 = RootAttachment
++    Align.CFrame = CFrame.new()
++    Align.RigidityEnabled = false
++    Align.Responsiveness = ALIGN_RESPONSIVENESS
++    Align.MaxAngularVelocity = math.huge
++    Align.MaxTorque = AIR_TORQUE
++    Align.Parent = RootPart
++
++    -- Hover: drives only the vertical velocity toward a target proportional to the
++    -- hover error (a first-order response, so it cannot oscillate).
++    local Hover = Instance.new("LinearVelocity")
++    Hover.Name = "HoverVelocity"
++    Hover.Attachment0 = RootAttachment
++    Hover.RelativeTo = Enum.ActuatorRelativeTo.World
++    Hover.VelocityConstraintMode = Enum.VelocityConstraintMode.Line
++    Hover.LineDirection = Vector3.yAxis
++    Hover.LineVelocity = 0
++    Hover.MaxForce = 0
++    Hover.Parent = RootPart
+ 
+     local Params = RaycastParams.new()
+     Params.FilterType = Enum.RaycastFilterType.Exclude
+     Params.FilterDescendantsInstances = {char}
+ 
+-    local Hover_Height = 3.8
+-    local Stiffness = 1000
+-    local Damping = 2 * math.sqrt(Stiffness)
+-
+     local conn
+-    conn = RunService.PreSimulation:Connect(function(dt)
++    conn = RunService.PreSimulation:Connect(function()
+         if not RootPart:IsDescendantOf(workspace) then
+             conn:Disconnect()
+             return
+         end
+ 
+-        local ray = RaycastingService.Raycast(RootPart.Position, Vector3.new(0, -Hover_Height, 0), Params)
+-        local final = Vector3.zero
+-        if ray then
+-
+-            local cf = RootPart.CFrame
+-            local angVel = RootPart.AssemblyAngularVelocity
+-
+-            local _, yaw, _ = cf:ToOrientation()
+-            local straight = CFrame.fromOrientation(0, yaw, 0)
+-
+-            local toCorrect = straight * cf.Rotation:Inverse()
+-            local axis, angle = toCorrect:ToAxisAngle()
+-
+-            local P = axis * angle * 5000
+-            local D = angVel * 500
+-            final = P - D
++        local ray = RaycastingService.Raycast(RootPart.Position, Vector3.new(0, -HOVER_HEIGHT, 0), Params)
++        local grounded = ray ~= nil
+ 
++        if grounded then
+             local distance = (RootPart.Position - ray.Position).Magnitude
+-            local err = Hover_Height - distance
++            local err = HOVER_HEIGHT - distance
++            local targetVelY = math.clamp(err * HOVER_GAIN, -MAX_HOVER_SPEED, MAX_HOVER_SPEED)
+             local velY = RootPart.AssemblyLinearVelocity.Y
+ 
+-            local force = (Stiffness * err) - (Damping * velY)
+-            RootPart:ApplyImpulse(Vector3.new(0, force * RootPart.AssemblyMass * dt, 0))
++            Hover.LineVelocity = targetVelY
++            -- Never fight upward motion that is already faster than the target (jumping).
++            if velY > targetVelY then
++                Hover.MaxForce = 0
++            else
++                Hover.MaxForce = RootPart.AssemblyMass * workspace.Gravity * HOVER_FORCE_MULT
++            end
++        else
++            Hover.MaxForce = 0
+         end
+-        Torque.Torque = Vector3.new(final.X, Torque.Torque.Y, final.Z)
+-        char:SetAttribute("OnGround", ray ~= nil)
++
++        Align.MaxTorque = if grounded then GROUND_TORQUE else AIR_TORQUE
++        char:SetAttribute("OnGround", grounded)
+     end)
+ end
+ 
+diff --git a/src/CharacterScripts/ClientInit/movement.luau b/src/CharacterScripts/ClientInit/movement.luau
+index 31053c8..b54dbe4 100644
+--- a/src/CharacterScripts/ClientInit/movement.luau
++++ b/src/CharacterScripts/ClientInit/movement.luau
+@@ -3,6 +3,10 @@ local module = {}
+ local GetdesiredMoveDirection = require(game.ReplicatedStorage:WaitForChild("Modules"):WaitForChild("utils")).getDesiredMoveDirection
+ local runService = game:GetService("RunService")
+ 
++local ACCELERATION = 100 -- studs/s^2
++local BRAKE_RATE = 8 -- 1/s: fraction of horizontal speed removed per second when no input
++local MAX_DT = 1 / 20 -- clamp so a lag spike can't turn into one huge impulse
++
+ function module.jump(character)
+     local humanoid = character:WaitForChild("Humanoid")
+     humanoid.Changed:Connect(function(property)
+@@ -16,20 +20,30 @@ function module.jump(character)
+ end
+ 
+ function module.Movement(character)
+-	runService.RenderStepped:Connect(function(dt)
++    -- PreSimulation: runs right before each physics step, so the impulse is applied
++    -- with the same dt that the physics is about to simulate.
++    runService.PreSimulation:Connect(function(dt)
++        dt = math.min(dt, MAX_DT)
++
++        local Torso = character.Torso
++        local mass = Torso.AssemblyMass
+         local MoveDir = GetdesiredMoveDirection()
+-		local force = MoveDir * 100 * character.Torso.AssemblyMass * dt
+-		local MaxSpeed = character.Humanoid.WalkSpeed
+-		local currentVelocity = character.Torso.AssemblyLinearVelocity * Vector3.new(1, 0, 1)
+-		if currentVelocity.Magnitude > MaxSpeed then
+-			force -= currentVelocity.Unit * math.max(force:Dot(currentVelocity.Unit), 0)
+-		end
++        local force = MoveDir * ACCELERATION * mass * dt
++        local MaxSpeed = character.Humanoid.WalkSpeed
++        local currentVelocity = Torso.AssemblyLinearVelocity * Vector3.new(1, 0, 1)
++
++        if currentVelocity.Magnitude > MaxSpeed then
++            force -= currentVelocity.Unit * math.max(force:Dot(currentVelocity.Unit), 0)
++        end
++
+         if MoveDir.Magnitude == 0 then
+-            force = currentVelocity * -.5
++            -- Frame-rate independent braking: remove a fixed fraction of the speed per
++            -- second (scaled by dt and mass), never more than the full velocity.
++            force = currentVelocity * -math.min(BRAKE_RATE * dt, 1) * mass
+         end
+ 
+-		character.Torso:ApplyImpulse(force)
+-	end)
++        Torso:ApplyImpulse(force)
++    end)
+ end
+ 
+ 
+@@ -38,4 +52,4 @@ function module.main(character)
+     module.Movement(character)
+ end
+ 
+-return module
+\ No newline at end of file
++return module
+-- 
+2.43.0
+
