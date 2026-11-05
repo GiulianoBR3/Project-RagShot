@@ -23,11 +23,11 @@ local REF_DT = 1 / 60
 
 function module.DisableStates(Humanoid)
     for _, v in Enum.HumanoidStateType:GetEnumItems() do
-        if v ~= Enum.HumanoidStateType.Physics and v ~= Enum.HumanoidStateType.Dead and v ~= Enum.HumanoidStateType.None then
+        if v ~= Enum.HumanoidStateType.Ragdoll and v ~= Enum.HumanoidStateType.Dead and v ~= Enum.HumanoidStateType.None and v ~= Enum.HumanoidStateType.Jumping then
             Humanoid:SetStateEnabled(v, false)
         end
     end
-    Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+    Humanoid:ChangeState(Enum.HumanoidStateType.Ragdoll)
 end
 
 function module.Balance(char, Humanoid)
