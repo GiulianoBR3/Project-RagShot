@@ -1,6 +1,6 @@
 local module = {}
 
-local CAS = game:GetService("ContextActionService")
+local keycodes = require(game:GetService("ReplicatedStorage").Modules.handeKeycodes)
 
 function module.main(char)
     local Humanoid = char:WaitForChild("Humanoid")
@@ -14,7 +14,7 @@ function module.main(char)
         end
     end
 
-    CAS:BindAction("Run",Run,false,Enum.KeyCode.LeftShift)
+    keycodes.CreateButton("run",Run)
 end
 
 return module
