@@ -3,7 +3,7 @@ local module = {}
 local GetdesiredMoveDirection = require(game.ReplicatedStorage:WaitForChild("Modules"):WaitForChild("utils")).getDesiredMoveDirection
 local runService = game:GetService("RunService")
 
-local ACCELERATION = 100 -- studs/s^2
+local ACCELERATION = 400 -- studs/s^2
 local BRAKE_RATE = 16 -- 1/s: fraction of horizontal speed removed per second when no input
 local MAX_DT = 1 / 20 -- clamp so a lag spike can't turn into one huge impulse
 

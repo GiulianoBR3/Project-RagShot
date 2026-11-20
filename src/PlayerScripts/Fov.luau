@@ -24,6 +24,10 @@ local function UpdateFov(dt)
 
 end
 
+function module.GetFov(name)
+    return Fov[name]
+end
+
 function module.SetFov(name, value)
     Fov[name] = value
 end

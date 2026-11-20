@@ -7,7 +7,7 @@ function module.main(char)
     local function Run(_,state)
         if state == Enum.UserInputState.Begin then
             if not char:FindFirstChild("RunBlocked") then
-                Humanoid.WalkSpeed = 24
+                Humanoid.WalkSpeed = 32
             end
         elseif state == Enum.UserInputState.End then
             Humanoid.WalkSpeed = 16

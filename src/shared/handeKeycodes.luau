@@ -8,6 +8,9 @@ module.tags = {
     },
     cameraDir = {
         Keycodes = {Enum.KeyCode.E,Enum.KeyCode.Q,Enum.KeyCode.ButtonLeft, Enum.KeyCode.ButtonRight}
+    },
+    lockUnlockMouse = {
+        Keycodes = {Enum.KeyCode.LeftControl,Enum.KeyCode.RightControl}
     }
 }
 module.ActiveButtons = {}
